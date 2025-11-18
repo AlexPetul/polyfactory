@@ -158,3 +158,36 @@ def test_sqlalchemy_type_handlers_v2(type_: types.TypeEngine) -> None:
 
     instance = ModelFactory.build()
     assert instance.overridden is not None
+
+
+def test_dataclass_mapped_do_not_init_field() -> None:
+    class Base(orm.DeclarativeBase): ...
+
+    class Parent(orm.MappedAsDataclass, Base):
+        __tablename__ = "tesT_model"
+
+        id: orm.Mapped[int] = orm.mapped_column(primary_key=True)
+        name: orm.Mapped[str] = orm.mapped_column(init=False)
+        children: orm.Mapped[list["Child"]] = orm.relationship(
+            "Child",
+            uselist=True,
+            init=False,
+        )
+
+        child_ids: orm.Mapped[list[int]] = association_proxy(
+            "children",
+            "id",
+        )
+
+    class Child(orm.MappedAsDataclass, Base):
+        __tablename__ = "child_with_overridden_type"
+
+        id: orm.Mapped[int] = orm.mapped_column(primary_key=True)
+        model_id: orm.Mapped[int] = orm.mapped_column(ForeignKey(Parent.id))
+
+    class ModelFactory(SQLAlchemyFactory[Parent]):
+        __model__ = Parent
+
+    instance = ModelFactory.build()
+    assert instance.name is None
+    assert instance.children == []
