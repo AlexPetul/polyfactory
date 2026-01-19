@@ -471,15 +471,19 @@ async def test_async_persistence(
             __model__ = AsyncModel
 
         instance = await Factory.create_async()
+        instance_id = instance.id
+
         batch_result = await Factory.create_batch_async(size=2)
         assert len(batch_result) == 2
+        batch_ids = [item.id for item in batch_result if item.id is not None]
+
 
     async with AsyncSession(async_engine) as session:
-        result = await session.scalar(select(AsyncModel).where(AsyncModel.id == instance.id))
+        result = await session.scalar(select(AsyncModel).where(AsyncModel.id == instance_id))
         assert result
 
-        for batch_item in batch_result:
-            result = await session.scalar(select(AsyncModel).where(AsyncModel.id == batch_item.id))
+        for batch_item_id in batch_ids:
+            result = await session.scalar(select(AsyncModel).where(AsyncModel.id == batch_item_id))
             assert result
 
 
