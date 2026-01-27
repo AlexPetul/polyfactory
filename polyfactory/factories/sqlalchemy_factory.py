@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_scoped_session
     from sqlalchemy.orm import Session, scoped_session
     from sqlalchemy.sql.type_api import TypeEngine
-    from typing_extensions import TypeGuard
+    from typing_extensions import NotRequired, TypeGuard
 
 
 T = TypeVar("T")
@@ -47,6 +47,10 @@ T = TypeVar("T")
 
 class SQLAlchemyBuildContext(BaseBuildContext):
     skip_computed_fields: bool
+
+
+class SQLAlchemyConstraints(Constraints):
+    computed: NotRequired[bool]
 
 
 class SQLASyncPersistence(SyncPersistenceProtocol[T]):
@@ -203,12 +207,10 @@ class SQLAlchemyFactory(Generic[T], BaseFactory[T]):
     def should_set_field_value(cls, field_meta: FieldMeta, **kwargs: Any) -> bool:
         build_context = kwargs.get("_build_context", {})
 
-        if (
-            field_meta.constraints
-            and field_meta.constraints.get("computed")
-            and build_context.get("skip_computed_fields")
-        ):
-            return False
+        if field_meta.constraints:
+            constraints = cast("SQLAlchemyConstraints", field_meta.constraints)
+            if constraints.get("computed") and build_context.get("skip_computed_fields"):
+                return False
 
         return super().should_set_field_value(field_meta, **kwargs)
 
@@ -250,7 +252,7 @@ class SQLAlchemyFactory(Generic[T], BaseFactory[T]):
                 raise ParameterException(msg) from None
             annotation = type_engine.impl.python_type  # pyright: ignore[reportAttributeAccessIssue]
 
-        constraints: Constraints = {}
+        constraints: SQLAlchemyConstraints = {}
         for type_, constraint_fields in cls.get_sqlalchemy_constraints().items():
             if not isinstance(type_engine, type_):
                 continue
@@ -275,7 +277,7 @@ class SQLAlchemyFactory(Generic[T], BaseFactory[T]):
             annotation = Union[annotation, None]  # type: ignore[assignment]
 
         if column.computed:
-            constraints: Constraints = {"computed": True}
+            constraints: SQLAlchemyConstraints = {"computed": True}
             annotation = Annotated[annotation, Frozendict(constraints)]  # type: ignore[assignment]
 
         return annotation
